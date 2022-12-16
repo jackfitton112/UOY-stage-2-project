@@ -36,14 +36,17 @@
 #include <Wire.h>
 #include <VL53L1X.h>
 #include <cmath>
-#include "motor.h"
+#include "motors.h"
+#include "pid.h"
 
-//init objects
+//init objects-
 VL53L1X sensor;
-Motor motorA(PWMA, AIN1, AIN2, ENCA1, ENCA2);
-Motor motorB(PWMB, BIN1, BIN2, ENCB1, ENCB2);
+//Motor motorA(PWMA, AIN1, AIN2, ENCA1, ENCA2);
+//Motor motorB(PWMB, BIN1, BIN2, ENCB1, ENCB2);
 
-
+Motors motors(PWMA, AIN1, AIN2, ENCA1, ENCA2, PWMB, BIN1, BIN2, ENCB1, ENCB2);
+PID PID_A (0.95,0.9,0.5);
+PID PID_B (1,0.11,0.52);
 
 void sensorInit(){
     Wire.begin();
@@ -59,31 +62,58 @@ void sensorInit(){
     sensor.startContinuous(25);
 }
 
-void IRAM_ATTR encoderData()
-{
-    int ENCA1_DATA = digitalRead(ENCA1);
-    int ENCA2_DATA = digitalRead(ENCA2);
-    int ENCB1_DATA = digitalRead(ENCB1);
-    int ENCB2_DATA = digitalRead(ENCB2);
+/*
 
-    if (ENCA1_DATA == HIGH && ENCA2_DATA == HIGH)
-    {
+void IRAM_ATTR encoderDataA()
+{
+
+    int ENCA2_DATA = digitalRead(ENCA2);
+
+    if (ENCA2_DATA == HIGH){
         motorA.encoderCount++;
     }
-    else if (ENCA1_DATA == HIGH && ENCA2_DATA == LOW)
-    {
+    else if (ENCA2_DATA == LOW){
         motorA.encoderCount--;
     }
 
-    if (ENCB1_DATA == HIGH && ENCB2_DATA == HIGH)
-    {
+}
+
+void IRAM_ATTR encoderDataB(){
+    int ENCB2_DATA = digitalRead(ENCB2);
+
+    if (ENCB2_DATA == HIGH){
         motorB.encoderCount++;
     }
-    else if (ENCB1_DATA == HIGH && ENCB2_DATA == LOW)
-    {
+    else if (ENCB2_DATA == LOW){
         motorB.encoderCount--;
     }
+}
 
+*/
+
+void IRAM_ATTR encoderDataA()
+{
+
+    int ENCA2_DATA = digitalRead(ENCA2);
+
+    if (ENCA2_DATA == HIGH){
+        motors.encoderCountA++;
+    }
+    else if (ENCA2_DATA == LOW){
+        motors.encoderCountA--;
+    }
+
+}
+
+void IRAM_ATTR encoderDataB(){
+    int ENCB2_DATA = digitalRead(ENCB2);
+
+    if (ENCB2_DATA == HIGH){
+        motors.encoderCountB++;
+    }
+    else if (ENCB2_DATA == LOW){
+        motors.encoderCountB--;
+    }
 }
 
 void setup(){
@@ -94,16 +124,18 @@ void setup(){
     //init sensor
     sensorInit();
 
+    //gives time to put the robot on the ground before it starts calibrating
+    delay(1000);
+
     //declare interrupt for encoder
-    attachInterrupt(ENCA1, encoderData, RISING);
-    attachInterrupt(ENCB1, encoderData, RISING);
+    attachInterrupt(ENCA1, encoderDataA, RISING);
+    attachInterrupt(ENCB1, encoderDataB, RISING);
 
 }
 
-void drive(int distance, int speed){
+void drive(int distance){
     //reset encoder count
-    motorA.encoderCount = 0;
-    motorB.encoderCount = 0;
+    motors.resetEncoders();
 
     //calc target encoder count
     // wheel diameter = 32mm
@@ -112,101 +144,80 @@ void drive(int distance, int speed){
     // 100.53/60 = 1.6755mm per tick
     // so distance in mm / 1.6755 = ticks
     int ticks = round(distance / 1.6755);
+    //subtract 30 ticks to account for the distance the robot will travel before the sensor detects the obstacle and stops the robot from moving forward
+    ticks = ticks - 30;
     //print ticks
     Serial.print("ticks: ");
     Serial.println(ticks);
     //set encoder target
-    motorA.encoderTarget = ticks;
-    motorB.encoderTarget = ticks;
+    PID_A.setTarget(ticks);
+    PID_B.setTarget(ticks);
 
-    motorA.changeSpeed(speed);
-    motorB.changeSpeed(speed);
+    motors.encoderTargetA = ticks;
+    motors.encoderTargetB = ticks;
+   
+   motors.setSpeedA(PID_A.update(motors.encoderCountA));
+    motors.setSpeedB(PID_B.update(motors.encoderCountB));
 
     while (true){
-
         //get the ticks remaining
-        int ticksRemainingA = motorA.encoderTarget - motorA.encoderCount;
-        int ticksRemainingB = motorB.encoderTarget - motorB.encoderCount;
+        int ticksRemainingA = motors.encoderTargetA - motors.encoderCountA;
+        int ticksRemainingB = motors.encoderTargetB - motors.encoderCountB;
         //Get the amount of ticks remaining as a percentage of the target
-        float percentRemainingA = (float)ticksRemainingA / (float)ticks * 100;
-        float percentRemainingB = (float)ticksRemainingB / (float)ticks * 100;
-
-        if (percentRemainingA < 50 && percentRemainingA > 25){
-            //if both motors are more than 50% of the way to the target, set speed to 20
-            int newSpeedA = speed << 1;
-            motorA.changeSpeed(newSpeedA);
-        }
-
-        else if (percentRemainingA < 25 && percentRemainingA > 15){
-            //if both motors are more than 25% of the way to the target, set speed to 1/4 of initial speed
-            int newSpeedA = speed << 2;
-            motorA.changeSpeed(newSpeedA);
-        }
-
-        else if (percentRemainingA < 15 && percentRemainingA > 5){
-            //if both motors are more than 10% of the way to the target, set speed to 1/8 of initial speed
-            int newSpeedA = speed << 3;
-            motorA.changeSpeed(newSpeedA);
-        }
-
-        else if (percentRemainingA < 5){
-            //if both motors are more than 5% of the way to the target, set speed to 0
-            motorA.stop();
-        }
-
-        //repeat for motor B
-
-        if (percentRemainingB < 50 && percentRemainingB > 25){
-            //if both motors are more than 50% of the way to the target, set speed to 20
-            int newSpeedB = speed << 1;
-            motorB.changeSpeed(newSpeedB);
-        }
-
-        else if (percentRemainingB < 25 && percentRemainingB > 15){
-            //if both motors are more than 25% of the way to the target, set speed to 1/4 of initial speed
-            int newSpeedB = speed << 2;
-            motorB.changeSpeed(newSpeedB);
-        }
-
-        else if (percentRemainingB < 15 && percentRemainingB > 5){
-            //if both motors are more than 10% of the way to the target, set speed to 1/8 of initial speed
-            int newSpeedB = speed << 3;
-            motorB.changeSpeed(newSpeedB);
-        }
-
-        else if (percentRemainingB < 5){
-            //if both motors are more than 5% of the way to the target, set speed to 0
-            motorB.stop();
-        }
+        float percentRemainingA = (float)ticksRemainingA / (float)motors.encoderTargetA * 100;
+        float percentRemainingB = (float)ticksRemainingB / (float)motors.encoderTargetB * 100;
 
         Serial.print("percentRemainingA: ");
         Serial.print(percentRemainingA);
         Serial.print(" percentRemainingB: ");
         Serial.println(percentRemainingB);
 
-        if (percentRemainingA < 5 && percentRemainingB < 5){
+        if (percentRemainingA < 3 ){
+            motors.stopA();
+        }
+
+        if (percentRemainingB < 3){
+            motors.stopB();
+        }
+
+        if (percentRemainingA < 1 && percentRemainingB < 1){
+            Serial.print("Target(A): ");
+            Serial.print(motors.encoderTargetA);
+            Serial.print(" Result(A): ");
+            Serial.println(motors.encoderCountA);
+            Serial.print("Target(B): ");
+            Serial.print(motors.encoderTargetB);
+            Serial.print(" Result(B): ");
+            Serial.println(motors.encoderCountB);         
             break;
         }
 
+        motors.setSpeedA(PID_A.update(motors.encoderCountA));
+        motors.setSpeedB(PID_B.update(motors.encoderCountB));
 
-   }
 
 
+
+    }
+
+
+    
 }
+
+
 
 int counter = 0;
 
 void loop(){
 
   if (counter < 1){
-    if (sensor.read() > 0){
-        Serial.println("Distance(mm): ");
-        Serial.println(sensor.read());      
-        drive(sensor.read(), 20);
-        counter++;
-    }
+        if (sensor.read() > 0){
+            Serial.println("Distance(mm): ");
+            Serial.println(sensor.read());      
+            drive(sensor.read());
+            counter++;
+        }
   }
 
-  
-  
+    
 }

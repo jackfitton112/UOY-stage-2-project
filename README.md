@@ -42,4 +42,16 @@ The micro mouse may use a variety of algorithms to solve the maze, such as wall 
 
 
 
+#### notes:
+
+there are going to be a few crutial functions, these will include:
+
+a function to move the mouse forward
+a function to turn left and right
+a watchdog to make sure the mouse is moving straight 
+a watchdog to make sure the mouse is not stuck / hit a wall
+
+> this will probs require getting the int pin on the tof working as then if if is stuck it will send a signal to the microcontroller and the microcontroller will then stop the motors
+
+
 

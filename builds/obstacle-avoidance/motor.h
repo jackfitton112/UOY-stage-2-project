@@ -11,6 +11,10 @@ private:
     int encoderAPin;
     int encoderBPin;
     int previousSpeedPercentage = 0;
+    int minSpeedCount = 0;
+
+    //serves as a cache for the speed, so that it saves calculating the speed every time it is called
+    int watchdogCount = 0;
 
 public:
     int encoderCount = 0;
@@ -86,21 +90,51 @@ public:
         setSpeed(0);
     }
 
-    void encoderCheck()
-    {
-        int encoderA = digitalRead(encoderAPin);
-        int encoderB = digitalRead(encoderBPin);
 
-        if (encoderA > 0 && encoderB == 0)
+    //this function kind of works, there are still some issue with one motor spinning fatseter than the other however it is a good start
+
+    void minSpeed(){
+
+
+        if (minSpeedCount != 0 || watchdogCount < 10)
         {
-            encoderCount++;
-            Serial.println(encoderCount);
+            setSpeed(minSpeedCount);
+            Serial.print("minSpeedCount: ");
+            Serial.println(minSpeedCount);
+            watchdogCount++;
+            return;
+
         }
-        else if (encoderA > 0 && encoderB > 0)
+
+        //syncs the encoder count to the previous encoder count
+        int prevEncoderCount = encoderCount;
+
+        for (int i = 1; i < 100; i++)
         {
-            encoderCount--;
-            Serial.println(encoderCount);
+            //sets the speed to the current speed
+            setSpeed(i);
+            //waits 25 milliseconds
+            delay(10);
+            //if the encoder count is the same as the previous encoder count
+            if (encoderCount > prevEncoderCount)
+            {
+                //sets the minimum speed to the current speed
+                minSpeedCount = i;
+                //resets the watchdog count to 0
+                watchdogCount = 0;
+                //breaks out of the loop
+                break;
+            }
+            
         }
+
+        //add 2% to the minimum speed to ensure the motor is moving
+        minSpeedCount += 2;
+        //sets the speed to the minimum speed
+        setSpeed(minSpeedCount);
+
+
+
     }
 
 
