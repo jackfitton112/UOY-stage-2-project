@@ -2,6 +2,9 @@
 
 > Note: This is still under development and may not fully work at the moment, there are serveral features that are not yet implemented.
 
+> Currently `obsticle-avoidance` is under development and is not yet fully functional. all other files are tested and working.
+
+
 The micro mouse is a small robot that is designed to solve a maze. It is equipped with an ESP 32 microcontroller and programmed using the Arduino/C programming language. The mouse uses a combination of sensors and algorithms to navigate through the maze and find the fastest path to the end.
 
 The micro mouse uses a VL53L1X sensor to detect obstacles and determine its position in the maze. The sensor emits a laser beam and measures the time it takes for the beam to bounce back, allowing the mouse to detect objects and obstacles in its path.
@@ -36,5 +39,7 @@ The micro mouse may use a variety of algorithms to solve the maze, such as wall 
 | GPIO1 / INT | N/A |N/A|
 
 > Note: XSHTU and GPIO1 / INT are not used for now. they will be used in the future for both sensors.
-> 
+
+
+
 
