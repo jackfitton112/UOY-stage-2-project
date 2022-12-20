@@ -14,6 +14,7 @@ class PID {
       targetTicks = target;
     }
 
+
     int update(int currentTicks) {
       // Calculate error
       int error = targetTicks - currentTicks;
@@ -43,11 +44,13 @@ class PID {
       return (int)output;
     }
 
+    int targetTicks; // Target tick count
+
   private:
     float kp; // Proportional coefficient
     float ki; // Integral coefficient
     float kd; // Derivative coefficient
-    int targetTicks; // Target tick count
+
     float iTerm; // Integral term
     float prevError; // Previous error
     float output; // PID output

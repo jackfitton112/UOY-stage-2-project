@@ -45,8 +45,8 @@ VL53L1X sensor;
 //Motor motorB(PWMB, BIN1, BIN2, ENCB1, ENCB2);
 
 Motors motors(PWMA, AIN1, AIN2, ENCA1, ENCA2, PWMB, BIN1, BIN2, ENCB1, ENCB2);
-PID PID_A (0.95,0.9,0.5);
-PID PID_B (1,0.11,0.52);
+PID PID_A (1,1,1);
+PID PID_B (1.15,1.1,1.1);
 
 void sensorInit(){
     Wire.begin();
@@ -136,6 +136,7 @@ void setup(){
 void drive(int distance){
     //reset encoder count
     motors.resetEncoders();
+    motors.PWM_Limit = 75;
 
     //calc target encoder count
     // wheel diameter = 32mm
@@ -205,19 +206,131 @@ void drive(int distance){
 }
 
 
+void fwd(int distance){
 
-int counter = 0;
+    //calc target encoder count
+    // wheel diameter = 32mm
+    // wheel circumference = 100.53mm
+    // 60 ticks per revolution
+    // 100.53/60 = 1.6755mm per tick
+    // so distance in mm / 1.6755 = ticks
+    int ticks = round(distance / 1.6755);
 
+    motors.PWM_Limit = 75;
+
+    //remove 30 ticks to account for the distance the robot will travel before the sensor detects the obstacle and stops the robot from moving forward
+    ticks = ticks - 30;
+
+    Serial.print("ticks: ");
+    Serial.println(ticks);
+
+    //reset encoder count, set encoder target, and set motor speed
+
+    motors.resetEncoders();
+    motors.encoderTargetA = ticks;
+    motors.encoderTargetB = ticks;
+
+    PID_A.setTarget(ticks);
+    PID_B.setTarget(ticks);
+
+    motors.setDirection(1);
+
+
+    motors.setSpeedA(PID_A.update(motors.encoderCountA));
+    motors.setSpeedB(PID_B.update(motors.encoderCountB));
+
+    Serial.print("SpeedA: ");
+    Serial.println(PID_A.update(motors.encoderCountA));
+    Serial.print("SpeedB: ");
+    Serial.println(PID_B.update(motors.encoderCountB));
+
+
+    int difference;;
+
+    while (true){
+        //difference is the average of the difference between the encoder count and the encoder target
+        difference = (abs(motors.encoderCountA - motors.encoderTargetA)+abs(motors.encoderCountB - motors.encoderTargetB))/2;
+        Serial.print("Difference: ");
+        Serial.println(difference);
+        motors.setSpeedA(PID_A.update(motors.encoderCountA));
+        motors.setSpeedB(PID_B.update(motors.encoderCountB));
+
+        if (PID_A.update(motors.encoderCountA) == 0 && PID_B.update(motors.encoderCountB) == 0){
+            break;
+        }
+    }
+
+
+
+}
+
+void left(){
+    //90 degrees = 45 ticks
+
+    //set direction of left motor to backwards
+    motors.setDirectionA(0);
+    //set direction of right motor to forwards
+    motors.setDirectionB(1);
+
+    //reset encoder count, set encoder target, and set motor speed
+    motors.resetEncoders();
+    motors.encoderTargetA = -25;
+    motors.encoderTargetB = 25;
+
+    motors.PWM_Limit = 45;
+
+    PID_A.setTarget(25);
+    PID_B.setTarget(25);
+
+    motors.setSpeedB(10);
+    motors.setSpeedA(10);
+
+    while (true){
+
+        motors.setSpeedA(PID_A.update(abs(motors.encoderCountA)));
+        motors.setSpeedB(PID_B.update(motors.encoderCountB));
+
+        if (PID_A.update(abs(motors.encoderCountA)) == 0 && PID_B.update(motors.encoderCountB) == 0){
+            break;
+        }
+    }
+
+
+
+}
+
+
+
+int count = 0;
 void loop(){
 
-  if (counter < 1){
-        if (sensor.read() > 0){
-            Serial.println("Distance(mm): ");
-            Serial.println(sensor.read());      
-            drive(sensor.read());
-            counter++;
-        }
-  }
+
+    if (count < 1){
+    int distance = sensor.read();
+
+    Serial.print("Distance: ");
+    Serial.println(distance);
+
+    if (distance < 1 || distance > 4000){
+        //if distance is out of range it is most likely because the sensor is not reading the correct value
+        //so we move forward to try and get a better reading
+        fwd(50);
+        
+    }
+
+    if (distance > 70){
+        Serial.println("Driving");
+        fwd(distance);
+
+    } else {
+        Serial.println("Turning Left");
+        left();
+    }
+    count++;
+    }
+    delay(2000);
+
+
 
     
 }
